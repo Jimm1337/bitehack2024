@@ -9,13 +9,14 @@ namespace SNS {
 template< pin_size_t PIN >
 class AnalogReader {
 public:
-  explicit AnalogReader(TickType_t delay): readDelay(delay){
+  explicit AnalogReader(TickType_t delay): readDelay(delay) {
     pinMode(PIN, INPUT);
   }
 
   inline void startTask() {
-    static taskParams params{readDelay, lastValue};
-    xTaskCreate(task, (String("ANALOG_PIN") + PIN).c_str(), 100, &params, 1, nullptr);
+    static taskParams params{ readDelay, lastValue };
+    xTaskCreate(
+      task, (String("ANALOG_PIN") + PIN).c_str(), 100, &params, 1, nullptr);
   }
 
   [[nodiscard]] inline int getLastValue() const {
@@ -24,18 +25,15 @@ public:
 
 private:
   static void task(void* params) {
-    auto* args = static_cast<taskParams*>(params);
-      while (true) {
+    auto* args = static_cast< taskParams* >(params);
+    while (true) {
       args->second = analogRead(PIN);
-
-      Serial.println(String("Analog ") + PIN + ": " + args->second);
-
       vTaskDelay(args->first);
     }
   }
 
   TickType_t readDelay;
-  int        lastValue {-1};
+  int        lastValue{ -1 };
 
   using taskParams = std::pair< decltype(readDelay), decltype(lastValue)& >;
 };
