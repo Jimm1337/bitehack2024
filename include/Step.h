@@ -14,10 +14,16 @@ public:
 
   void step(int steps) {
     stepper.step(steps);
+    position += steps;
+  }
+
+  int getPosition() const {
+    return position;
   }
 
 private:
-  Stepper stepper{ 200, PIN1, PIN2, PIN3, PIN4 };
+  Stepper stepper{ 32, PIN1, PIN2, PIN3, PIN4 };
+  int     position{ 0 };
 };
 
 } // namespace SNS

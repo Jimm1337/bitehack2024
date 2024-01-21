@@ -3,34 +3,27 @@
 namespace SNS {
 
 Api::Api() {
-  photoresNorth.startTask();
-  photoresEast.startTask();
-  photoresSouth.startTask();
-  photoresWest.startTask();
-
-  voltage.startTask();
-
-  startTasksBalance();
-
   Serial.println("[*] Starting access point");
 
-  status = WiFi.beginAP(SSID, PASS);
-  while (status != WL_AP_LISTENING) {
-    Serial.println("[!] Creating access point failed");
-    delay(1000);
-  }
+  status = WiFi.begin(SSID, PASS);
 
   server.begin();
 
-  Serial.print("SSID: ");
-  Serial.println(WiFi.SSID());
-
   // print your WiFi shield's IP address:
-  IPAddress ip = WiFi.localIP();
   Serial.print("IP Address: ");
-  Serial.println(ip);
+  Serial.println(WiFi.localIP());
 
-  xTaskCreate(controllerTask, "Controller", 500, this, 1, nullptr);
+  photoresCcw.startTask();  // Stack 80B
+  photoresUp.startTask();   // Stack 80B
+  photoresCw.startTask();   // Stack 80B
+  photoresDown.startTask(); // Stack 80B
+  voltage.startTask();      // Stack 80B
+
+  startTasksBalance(); // Stack 400B
+
+  xTaskCreate(
+    controllerTask, "Controller", 500, this, 2, nullptr); // Stack 800B
+
   vTaskStartScheduler();
 }
 
@@ -38,141 +31,168 @@ void Api::controllerTask(void* thisPtr) {
   auto* self = static_cast< Api* >(thisPtr);
 
   while (true) {
+    taskBalanceAngle(self);
+    //    taskBalanceRotation(self);
+
     WiFiClient client = self->server.available();
     if (!client) { continue; }
 
     Serial.println("[*] New client connected");
-    String currentLine = "";
-    EndpointFn endpoint = endpointNotFound;
+    String     currentLine = "";
+    EndpointFn endpoint    = endpointNotFound;
 
     while (client.connected()) {
       delayMicroseconds(10);
-      if (client.available()) {
-        char c = client.read();
-        if (c == '\n') { // if the byte is a newline character
+      if (!client.available()) { break; }
 
-          // if the current line is blank, you got two newline characters in a
-          // row. that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-            endpoint(self, client);
+      char c = client.read();
+      if (c == '\n') { // if the byte is a newline character
 
-            // The HTTP response ends with another blank line:
-            client.println();
-            // break out of the while controllerTask:
-            break;
-          } else { // if you got a newline, then clear currentLine:
-            if (currentLine.indexOf("GET /forward") >= 0) {
-              endpoint = endpointMoveForward;
-            } else if (currentLine.indexOf("GET /backward") >= 0) {
-              endpoint = endpointMoveBackward;
-            } else if (currentLine.indexOf("GET /left") >= 0) {
-              endpoint = endpointRotateLeft;
-            } else if (currentLine.indexOf("GET /right") >= 0) {
-              endpoint = endpointRotateRight;
-            } else if (currentLine.indexOf("GET /stop") >= 0) {
-              endpoint = endpointStop;
-            } else if (currentLine.indexOf("GET /scan") >= 0) {
-              endpoint = endpointScan;
-            } else if (currentLine.indexOf("GET /distance") >= 0) {
-              endpoint = endpointGetDistance;
-            } else if (currentLine.indexOf("GET /photoresistors") >= 0) {
-              endpoint = endpointGetPhotoresistors;
-            } else if (currentLine.indexOf("GET /voltage") >= 0) {
-              endpoint = endpointGetVoltage;
-            }
+        // if the current line is blank, you got two newline characters in a
+        // row. that's the end of the client HTTP request, so send a response:
+        if (currentLine.length() == 0) {
+          endpoint(self, client);
 
-            currentLine = "";
+          // The HTTP response ends with another blank line:
+          client.println();
+          // break out of the while controllerTask:
+          break;
+        } else { // if you got a newline, then clear currentLine:
+          if (currentLine.indexOf("GET /forward") >= 0) {
+            endpoint = endpointMoveForward;
+          } else if (currentLine.indexOf("GET /backward") >= 0) {
+            endpoint = endpointMoveBackward;
+          } else if (currentLine.indexOf("GET /left") >= 0) {
+            endpoint = endpointRotateLeft;
+          } else if (currentLine.indexOf("GET /right") >= 0) {
+            endpoint = endpointRotateRight;
+          } else if (currentLine.indexOf("GET /stop") >= 0) {
+            endpoint = endpointStop;
+          } else if (currentLine.indexOf("GET /distance") >= 0) {
+            endpoint = endpointGetDistance;
+          } else if (currentLine.indexOf("GET /photoresistors") >= 0) {
+            endpoint = endpointGetPhotoresistors;
+          } else if (currentLine.indexOf("GET /voltage") >= 0) {
+            endpoint = endpointGetVoltage;
           }
-        } else if (c != '\r') { // if you got anything else but a carriage// return character,
-          currentLine += c;     // add it to the end of the currentLine
+
+          currentLine = "";
         }
+      } else if (c != '\r') { // if you got anything else but a carriage//
+                              // return character,
+        currentLine += c;     // add it to the end of the currentLine
       }
     }
 
     client.stop();
     Serial.println("[*] Client disconnected");
 
-    vTaskDelay(1);
+    vTaskDelay(3);
   }
 }
 
 void Api::startTasksBalance() {
-  xTaskCreate(taskBalanceRotation, "BalanceRotation", 0, this, 1, nullptr);
-  xTaskCreate(taskBalanceAngle, "BalanceAngle", 0, this, 1, nullptr);
+  //  xTaskCreate(taskBalanceRotation, "BalanceRotation", 100, this, 3,
+  //  nullptr); xTaskCreate(taskBalanceAngle, "BalanceAngle", 100, this, 3,
+  //  nullptr);
 }
 
 void Api::taskBalanceRotation(void* param) {
   auto* self = static_cast< Api* >(param);
 
-  while (true) {
-    // TODO: balance
+  const auto lightEast = self->photoresCcw.getLastValue();
+  const auto lightWest = self->photoresCw.getLastValue();
+  const auto diff      = lightEast - lightWest;
 
-    vTaskDelay(1);
+  //  Serial.print(String("Diff: ") + diff);
+  //  Serial.println(String(" Angle: ") + self->stepColumn.getPosition());
+
+  if (abs(diff) > 10) {
+    if (diff > 0 && self->stepColumn.getPosition() < 9999) {
+      self->stepColumn.step(5);
+    } else if (self->stepColumn.getPosition() > -9999) {
+      self->stepColumn.step(-5);
+    }
   }
 }
 
 void Api::taskBalanceAngle(void* param) {
-  auto* self = static_cast< Api* >(param);
+  auto*      self      = static_cast< Api* >(param);
+  const auto lightUp   = self->photoresUp.getLastValue();
+  const auto lightDown = self->photoresDown.getLastValue();
+  const auto diff      = lightUp - lightDown;
 
-  while (true) {
-    // TODO: balance
-
-    vTaskDelay(1);
+  if (abs(diff) > 25) {
+    if (diff < 0 && self->servo.getAngle() <= 70) {
+      self->servo.setAngle(self->servo.getAngle() + 1);
+    } else if (self->servo.getAngle() > 0) {
+      self->servo.setAngle(self->servo.getAngle() - 1);
+    }
   }
 }
 
 void Api::endpointMoveForward(Api* self, WiFiClient& client) {
   Serial.println("[*] Moving forward");
 
+  vTaskSuspendAll();
   self->motorLeft.startForward();
   self->motorRight.startForward();
+  xTaskResumeAll();
 
   client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println();
 }
 
 void Api::endpointMoveBackward(Api* self, WiFiClient& client) {
   Serial.println("[*] Moving backward");
 
+  vTaskSuspendAll();
   self->motorLeft.startBackward();
   self->motorRight.startBackward();
+  xTaskResumeAll();
 
   client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println();
 }
 
 void Api::endpointRotateLeft(Api* self, WiFiClient& client) {
   Serial.println("[*] Rotating left");
 
-  self->motorRight.startBackward();
+  vTaskSuspendAll();
+  self->motorLeft.startBackward();
+  self->motorRight.startForward();
+  xTaskResumeAll();
 
   client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println();
 }
 
 void Api::endpointRotateRight(Api* self, WiFiClient& client) {
   Serial.println("[*] Rotating right");
 
-  self->motorLeft.startBackward();
+  vTaskSuspendAll();
+  self->motorLeft.startForward();
+  self->motorRight.startBackward();
+  xTaskResumeAll();
 
   client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println();
 }
 
 void Api::endpointStop(Api* self, WiFiClient& client) {
   Serial.println("[*] Stopping");
 
+  vTaskSuspendAll();
   self->motorLeft.stop();
   self->motorRight.stop();
+  xTaskResumeAll();
 
   client.println("HTTP/1.1 200 OK");
-  client.println();
-}
-
-void Api::endpointScan(Api*  /*self*/, WiFiClient& client) {
-  Serial.println("[*] Scanning");
-
-  client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println();
 }
 
@@ -180,11 +200,14 @@ void Api::endpointGetDistance(Api* self, WiFiClient& client) {
   Serial.println("[*] Getting distance");
 
   client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println("Content-Type: application/json");
   client.println();
 
   JsonWriter writer{ &client };
-  writer.beginObject().property("distance", self->distance.getDistance()).endObject();
+  writer.beginObject()
+    .property("distance", self->distance.getDistance())
+    .endObject();
 
   client.println();
 }
@@ -193,16 +216,17 @@ void Api::endpointGetPhotoresistors(Api* self, WiFiClient& client) {
   Serial.println("[*] Getting photoresistors");
 
   client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println("Content-Type: application/json");
   client.println();
 
   JsonWriter writer{ &client };
-    writer.beginObject()
-      .property("north", self->photoresNorth.getLastValue())
-      .property("east", self->photoresEast.getLastValue())
-      .property("south", self->photoresSouth.getLastValue())
-      .property("west", self->photoresWest.getLastValue())
-      .endObject();
+  writer.beginObject()
+    .property("north", self->photoresCcw.getLastValue())
+    .property("east", self->photoresUp.getLastValue())
+    .property("south", self->photoresCw.getLastValue())
+    .property("west", self->photoresDown.getLastValue())
+    .endObject();
 
   client.println();
 }
@@ -211,19 +235,23 @@ void Api::endpointGetVoltage(Api* self, WiFiClient& client) {
   Serial.println("[*] Getting voltage");
 
   client.println("HTTP/1.1 200 OK");
+  client.println("Access-Control-Allow-Origin: *");
   client.println("Content-Type: application/json");
   client.println();
 
   JsonWriter writer{ &client };
-  writer.beginObject().property("voltage", self->voltage.getLastValue()).endObject();
+  writer.beginObject()
+    .property("voltage", self->voltage.getLastValue())
+    .endObject();
 
   client.println();
 }
 
-void Api::endpointNotFound(Api*  /*self*/, WiFiClient& client) {
+void Api::endpointNotFound(Api* /*self*/, WiFiClient& client) {
   Serial.println("[!] Endpoint not found");
 
   client.println("HTTP/1.1 404 Not Found");
+  client.println("Access-Control-Allow-Origin: *");
   client.println();
 }
 

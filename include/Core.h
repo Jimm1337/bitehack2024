@@ -12,17 +12,17 @@ namespace SNS {
 namespace PINS {
 
 namespace PHOTORESISTORS {
-inline constexpr pin_size_t NORTH = A0;
-inline constexpr pin_size_t EAST  = A1;
-inline constexpr pin_size_t SOUTH = A2;
-inline constexpr pin_size_t WEST  = A3;
+inline constexpr pin_size_t CCW   = A3;
+inline constexpr pin_size_t UP    = A2;
+inline constexpr pin_size_t CW    = A1;
+inline constexpr pin_size_t DOWN  = A0;
 } // namespace PHOTORESISTORS
 
 namespace DCMOTORS {
 inline constexpr pin_size_t LEFT_IN1  = 2;
 inline constexpr pin_size_t LEFT_IN2  = 3;
-inline constexpr pin_size_t RIGHT_IN3 = 4;
-inline constexpr pin_size_t RIGHT_IN4 = 5;
+inline constexpr pin_size_t RIGHT_IN3 = 5;
+inline constexpr pin_size_t RIGHT_IN4 = 4;
 } // namespace DCMOTORS
 
 namespace SERVOS {

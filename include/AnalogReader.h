@@ -16,7 +16,7 @@ public:
   inline void startTask() {
     static taskParams params{ readDelay, lastValue };
     xTaskCreate(
-      task, (String("ANALOG_PIN") + PIN).c_str(), 100, &params, 1, nullptr);
+      task, (String("ANALOG_PIN") + PIN).c_str(), 50, &params, 3, nullptr);
   }
 
   [[nodiscard]] inline int getLastValue() const {

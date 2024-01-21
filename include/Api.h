@@ -11,6 +11,8 @@
 #include "Motor.h"
 #include "ServoMechanism.h"
 #include "Step.h"
+#include <Arduino_FreeRTOS.h>
+#include <gsl/gsl>
 
 namespace SNS {
 
@@ -37,17 +39,17 @@ private:
   static void endpointGetVoltage(Api* self, WiFiClient& client);
   static void endpointNotFound(Api* self, WiFiClient& client);
 
-  inline static constexpr gsl::czstring SSID = "bitehack2024";
-  inline static constexpr gsl::czstring PASS = "bitehack2024";
+  inline static constexpr gsl::czstring SSID = "BITEhack Robotyczna";
+  inline static constexpr gsl::czstring PASS = "1234567891011";
   inline static constexpr auto          PORT = 80;
 
   WiFiServer server{ PORT };
   int        status{ WL_IDLE_STATUS };
 
-  AnalogReader< PINS::PHOTORESISTORS::NORTH > photoresNorth{ 100 };
-  AnalogReader< PINS::PHOTORESISTORS::EAST >  photoresEast{ 100 };
-  AnalogReader< PINS::PHOTORESISTORS::SOUTH > photoresSouth{ 100 };
-  AnalogReader< PINS::PHOTORESISTORS::WEST >  photoresWest{ 100 };
+  AnalogReader< PINS::PHOTORESISTORS::CCW >  photoresCcw{ 101 };
+  AnalogReader< PINS::PHOTORESISTORS::UP >   photoresUp{ 102 };
+  AnalogReader< PINS::PHOTORESISTORS::CW >   photoresCw{ 103 };
+  AnalogReader< PINS::PHOTORESISTORS::DOWN > photoresDown{ 104 };
 
   AnalogReader< PINS::PANEL::PWR > voltage{ 100 };
 
@@ -63,7 +65,7 @@ private:
     PINS::STEPPERS::COLUMN_2,
     PINS::STEPPERS::COLUMN_3,
     PINS::STEPPERS::COLUMN_4 >
-    stepColumn{ 180 };
+    stepColumn{ 500 };
 
   using EndpointFn = void (*)(Api*, WiFiClient&);
 };

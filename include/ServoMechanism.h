@@ -10,14 +10,21 @@ class ServoMechanism {
 public:
   ServoMechanism() {
     servo.attach(pinServo);
+    setAngle(0);
   }
 
-  inline void setAngle(uint8_t angle) {
+  inline void setAngle(int angle) {
     servo.write(angle);
+    this->angle = angle;
+  }
+
+  inline int getAngle() const {
+    return angle;
   }
 
 private:
   Servo servo{};
+  int   angle{ 0 };
 };
 
 } // namespace SNS
